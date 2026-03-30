@@ -2,6 +2,7 @@ import gymnasium as gym
 import gymnasium_robotics
 import numpy as np
 from gym_robotics_custom import RoboGymObservationWrapper
+from model import *
 gym.register_envs(gymnasium_robotics)
 
 if __name__ == "__main__":
@@ -22,7 +23,5 @@ if __name__ == "__main__":
     )
     env = RoboGymObservationWrapper(env)
     obs, info = env.reset()
-    for i in range(1000):
-        action = env.action_space.sample()
-        env.step(action)
+    critic = Critic(8, 2, 256)
     env.close()
