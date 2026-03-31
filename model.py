@@ -69,3 +69,50 @@ class Critic(nn.Module):
     def load_checkpoint(self):
         """Tải trọng số model từ file checkpoint"""
         self.load_state_dict(torch.load(self.checkpoint_file))
+
+class Actor(nn.Module):
+    def __init__(self, num_inputs, num_actions, hidden_dim, action_space = None, checkpoint_dir = 'checkpoints', name = 'actor_network'):
+        super(Actor, self).__init__()
+
+        self.linear1 = nn.Linear(num_inputs, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        
+        self.mean_linear = nn.Linear(hidden_dim, num_actions)  # Output cho mean
+        self.log_std_linear = nn.Linear(hidden_dim, num_actions)  # Output cho log std
+        
+        self.name = name
+        self.checkpoint_dir = checkpoint_dir
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
+        self.apply(weights_init_)
+
+        if action_space is None: 
+            self.action_scale = torch.tensor(1.)
+            self.action_bias = torch.tensor(0.)
+        else:
+            self.action_scale = torch.FloatTensor((action_space.high - action_space.low) / 2.) 
+            self.action_bias = torch.FloatTensor((action_space.high + action_space.low) / 2.)
+
+    def forward(self, state):
+        x = F.relu(self.linear1(state))  # Linear + ReLU activation
+        x = F.relu(self.linear2(x))      # Hidden layer + ReLU
+        mean = self.mean_linear(x)       # Output layer (mean)
+        log_std = self.log_std_linear(x) # Output layer (log std)
+        log_std = torch.clamp(log_std, min = LOG_SIG_MIN, max = LOG_SIG_MAX)  # Giới hạn log std
+        return mean, log_std
+    
+    def sample(self, state):
+        mean, self.log_std = self.forward(state)  # Lấy mean và log std từ forward pass
+        std = log_std_exp();
+        normal = Normal(mean, std)
+        x_t = normal.rsample()  # Lấy mẫu từ phân phối Normal (reparameterization trick)
+        y_t = torch.tanh(x_t)  # Áp dụng tanh để giới hạn hành động trong [-1, 1]
+        action = y_t * self.action_scale + self.action_bias  # Áp dụng scale và bias
+        log_prob = normal.log_prob(x_t)  # Tính log-probability của hành động
+
+        log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)  # Điều chỉnh log-probability sau khi áp dụng tanh
+        log_prob = log_prob.sum(1, keepdim=True)  # Tổng log-probability cho tất cả các action dimensions
+        mean = torch .tanh(mean) * self.action_scale + self.action_bias  # Tính mean sau khi áp dụng tanh và scale/bias
+        return action, log_prob, mean
+    def save_checkpoint(self):
+        """Lưu trọng số model vào file checkpoint"""
+        torch.save(self.state_dict(), self.checkpoint_file)
