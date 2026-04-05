@@ -42,7 +42,7 @@ class ReplayBuffer():
 
         self.mem_ctr += 1
 
-    def sapmle_buffer(self, batch_size):
+    def sample_buffer(self, batch_size):
         """
         Lấy ngẫu nhiên 1 lô dữ liệu để bỏ vào train
         """
@@ -50,12 +50,12 @@ class ReplayBuffer():
         batch = np.random.choice(max_mem, batch_size)
 
         states = self.state_memory[batch]
-        next_states = self.state_memory[batch]
+        next_states = self.new_state_memory[batch]
         action = self.action_memory[batch]
         reward = self.reward_memory[batch]
-        dones = self.reward_memory[batch]
+        dones = self.terminal_memory[batch]
 
-        return state, action, reward, next_state, dones
+        return states, action, reward, next_states, dones
 
 
 

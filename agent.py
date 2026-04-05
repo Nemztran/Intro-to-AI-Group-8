@@ -1,7 +1,7 @@
 import os
 import torch
 import torch.nn.function as F
-from torch.optiom import Adam
+from torch.optim import Adam
 from model import *
 
 def hard_update(target, source):
@@ -54,7 +54,7 @@ class Agent:
     def select_action(self, state, evaluate=False):
         """Quyết đinh action dựa trên status hiện tại
         """
-        state = torch.FLoatTensor(state).to(self.device).unsqueeze(0)  # Thêm batch dimension
+        state = torch.FloatTensor(state).to(self.device).unsqueeze(0)  # Thêm batch dimension
         if evaluate is False: # Nếu eva đanh là flase -> đang training, lấy action có yêu tố khám phá
             action, _, _ = self.policy.sample(state)
         else: 
@@ -72,7 +72,7 @@ class Agent:
         self.critic_target.save_checkpoint()
         self.policy.save_checkpoint()
     
-    def load_checkpointl(self, evaluate=False):
+    def load_checkpoint(self, evaluate=False):
         try:
             print('Loading models...')
             self.critic.load_checkpoint()
