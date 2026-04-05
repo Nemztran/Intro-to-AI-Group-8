@@ -1,9 +1,11 @@
 import os
 import torch
-import torch.nn.function as F
+import torch.nn.functional as F
 from torch.optim import Adam
 from model import *
-
+from buffer import ReplayBuffer
+from torch.utils.tensorboard import SummaryWriter
+import datetime
 def hard_update(target, source):
     """Copy thẳng trọng số từ source sang target"""
     for target_param, param in zip(target.parameters(), source.parameters()):
@@ -64,6 +66,55 @@ class Agent:
     def update_parameters(self, memory, batch_size, updates):
         pass
 
+    def train(self, env, env_name, memory : ReplayBuffer, episodes = 1000, batch_size=64, updates_per_step=1, summary_writer_name="", max_episode_steps=100):
+        from datetime import datetime
+        warmup = 20
+        #Tensorboard
+        summary_writer_name= f"runs/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_" + summary_writer_name
+        writer= SummaryWriter(summary_writer_name)
+
+        #Training Loop 
+        total_numsteps= 0
+        update= 0
+
+        for i_episode in range(episodes):
+            episode_reward= 0
+            episode_steps= 0
+            done= False
+            state, _ = env.reset()
+
+            while not done and episode_steps < max_episode_steps:
+                if warmup > i_episode:
+                    action = env.action_space.sample()
+                else:
+                    action = self.select_action(state)
+                if memory.can_sample(batch_size=batch_size):
+                    for i in range(updates_per_step):
+                        critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = self.update_parameters(memory, batch_size, update)
+                        #Tensorboard
+                        writer.add_scalar('loss/critic_1', critic_1_loss, update)
+                        writer.add_scalar('loss/critic_2', critic_2_loss, update)
+                        writer.add_scalar('loss/policy', policy_loss, update)
+                        writer.add_scalar('loss/entropy', ent_loss, update)
+                        writer.add_scalar('parameters/alpha', alpha, update)
+                        update += 1
+                next_state, reward, done, _, _= env.step(action)
+
+                episode_steps += 1
+                total_numsteps += 1
+                episode_reward += reward
+            
+                mask = 1 if episode_steps == max_episode_steps else float(not done)
+
+                memory.store_transition(state, action, reward, next_state, mask)
+
+                state = next_state
+            writer.add_scalar('reward/train', episode_reward, i_episode)
+            print(f"Episode: {i_episode}, total numsteps: {total_numsteps}, episode steps: {episode_steps}, reward: {round(episode_reward, 2)}")
+            if i_episode % 10 == 0:
+                self.save_checkpoint()
+
+                
     def save_checkpoint(self):
         if not os.path.exists(self.critic.checkpoint_dir): 
             os.makedirs(self.critic.checkpoint_dir)

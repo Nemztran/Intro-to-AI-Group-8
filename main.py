@@ -2,13 +2,25 @@ import gymnasium as gym
 import gymnasium_robotics
 import numpy as np
 from gym_robotics_custom import RoboGymObservationWrapper
+from agent import Agent
+from buffer import ReplayBuffer
 from model import *
 gym.register_envs(gymnasium_robotics)
 
 if __name__ == "__main__":
     env_name = "PointMaze_UMaze-v3"
     max_episode_steps = 100
-
+    replay_buffer_size = 1000000
+    episodes = 1000
+    batch_size = 64
+    updates_per_step = 4
+    gamma = 0.99
+    tau = 0.99
+    alpha = 0.12
+    target_update_interval = 1
+    hidden_size = 512
+    learning_rate = 0.0001
+    exploration_scaling_factor = 1.5
     STRAIGHT_MAZE = [
         [1, 1, 1, 1, 1],
         [1, 0, 0, 0, 1],
@@ -19,9 +31,15 @@ if __name__ == "__main__":
         env_name,
         max_episode_steps=max_episode_steps,
         maze_map=STRAIGHT_MAZE,
-        render_mode='human'
+        render_mode=None
     )
     env = RoboGymObservationWrapper(env)
     obs, info = env.reset()
-    critic = Critic(8, 2, 256)
+    obs_size = obs.shape[0]
+    #Agent
+    agent = Agent(obs_size, env.action_space, gamma=gamma, tau=tau, alpha=alpha, policy='Gaussian', target_update_interval=target_update_interval, hidden_size=hidden_size, learning_rate=learning_rate, exploration_scaling_factor=exploration_scaling_factor)
+    memory = ReplayBuffer(replay_buffer_size, input_size=obs_size, n_actions=env.action_space.shape[0])
+    agent.train(env=env, env_name=env_name, memory=memory, episodes=100, batch_size=batch_size,
+                updates_per_step=updates_per_step, summary_writer_name=f"straight_maze={alpha}_lr={learning_rate}_hs={hidden_size}_a={alpha}",
+                max_episode_steps=max_episode_steps)
     env.close()
