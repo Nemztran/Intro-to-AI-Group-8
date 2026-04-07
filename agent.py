@@ -3,6 +3,7 @@ import torch
 import torch.nn.function as F
 from torch.optiom import Adam
 from model import *
+from buffer import ReplayBuffer
 
 def hard_update(target, source):
     """Copy thẳng trọng số từ source sang target"""
@@ -17,7 +18,7 @@ def soft_update(target, source, tau):
         target_param.data.copy_(tau*param.data + (1.0-tau)*target_param.data)
 
 class Agent:
-    def __init__(self, num_inputs, action_space, gamma, tau, alpha, policy, target_update_interval, hidden_size, learning_rate, exploration_scaling_factor):
+    def __init__(self, num_inputs, action_space, gamma, tau, alpha, target_update_interval, hidden_size, learning_rate, exploration_scaling_factor):
         """
         Args:
             num_inputs: Kích thước của state space
@@ -34,8 +35,6 @@ class Agent:
         self.gamma = gamma
         self.tau = tau
         self.alpha = alpha
-        
-        self.policy_type = policy
 
         self.target_update_interval = target_update_interval
 
@@ -61,8 +60,58 @@ class Agent:
             _, _, action = self.policy.sample(state) # nếu eva là true -> đang evaluate, lấy action có giá trị cao nhất (không có yếu tố khám phá)
         return action.detach().cpu().numpy()[0]  # Trả về action dưới dạng numpy array, bỏ batch dimension
     
-    def update_parameters(self, memory, batch_size, updates):
-        pass
+    def update_parameters(self, memory: ReplayBuffer, batch_size: int, updates: int):
+        """
+        Ý tưởng: Lấy 1 lô dữ liệu từ ReplayBuffer, bao gồm: state, action, rewward, next_state, mask(episode đã kết thúc ch) để cập nhật critic và policy networks.
+        Args:
+            memory: ReplayBuffer chứa các trải nghiệm
+            batch_size: Kích thước của lô dữ liệu để cập nhật
+            updates: Số lần cập nhật đã thực hiện (để quyết định khi nào cập nhật target networks)
+        """
+        state_batch, action_batch, reward_batch, next_state_batch, mask_batch = memory.sample_buffer(batch_size=batch_size)
+
+        #Chuyển dữ liệu sang tensor và đưa lên thiết bị (GPU hoặc CPU)
+        state_batch = torch.FloatTensor(state_batch).to(self.device)
+        next_state_batch = torch.FloatTensor(next_state_batch).to(self.device)
+        action_batch = torch.FloatTensor(action_batch).to(self.device)
+        reward_batch = torch.FloatTensor(reward_batch).to(self.device).unsqueeze(1)
+        mask_batch = torch.FloatTensor(mask_batch).to(self.device).unsqueeze(1)
+
+        # Cập nhật critic
+        with torch.no_grad():
+            next_state_action, next_state_log_pi, _ = self.policy.sample(next_state_batch)
+            qf1_next_target, qf2_next_target = self.critic_target(next_state_batch, next_state_action)
+            min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self.alpha * next_state_log_pi
+            next_q_value = reward_batch + mask_batch * self.gamma * (min_qf_next_target)
+        
+        qf1, qf2 = self.critic(state_batch, action_batch)  # Lấy giá trị Q hiện tại từ critic
+        qf1_loss = F.mse_loss(qf1, next_q_value) 
+        qf2_loss = F.mse_loss(qf2, next_q_value)
+        qf2_loss = qf1_loss + qf2_loss
+
+        #Cập nhật critic
+        self.critic_optimizer.zero_grad()
+        qf2_loss.backward()
+        self.critic_optimizer.step()
+
+        p1, log_pi, _ = self.policy.sample(state_batch)
+        qf1_pi, qf2_pi = self.critic(state_batch, p1)
+        min_qf_pi = torch.min(qf1_pi, qf2_pi)
+
+        policy_loss = ((self.alpha * log_pi) - min_qf_pi).mean()
+
+        self.policy_optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy_optimizer.step()
+
+        alpha_loss = torch.tensor(0.).to(self.device)  # 
+        alpha_tlogs = torch.tensor(self.alpha)
+
+        if updates % self.target_update_interval == 0:
+            soft_update(self.critic_target, self.critic, self.tau)
+        
+        return qf1_loss.item(), qf2_loss.item(), policy_loss.item(), alpha_loss.item(), alpha_tlogs.item()
+
 
     def save_checkpoint(self):
         if not os.path.exists(self.critic.checkpoint_dir): 
