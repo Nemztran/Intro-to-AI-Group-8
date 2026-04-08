@@ -102,7 +102,7 @@ class Actor(nn.Module):
     
     def sample(self, state):
         mean, self.log_std = self.forward(state)  # Lấy mean và log std từ forward pass
-        std = log_std_exp();
+        std = torch.exp(self.log_std)  # Tính độ lệch chuẩn
         normal = Normal(mean, std)
         x_t = normal.rsample()  # Lấy mẫu từ phân phối Normal (reparameterization trick)
         y_t = torch.tanh(x_t)  # Áp dụng tanh để giới hạn hành động trong [-1, 1]

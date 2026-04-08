@@ -51,7 +51,7 @@ if __name__ == "__main__":
     obs, info = env.reset()
     obs_size = obs.shape[0]
     #Agent
-    agent = Agent(obs_size, env.action_space, gamma=gamma, tau=tau, alpha=alpha, policy='Gaussian', target_update_interval=target_update_interval, hidden_size=hidden_size, learning_rate=learning_rate, exploration_scaling_factor=exploration_scaling_factor)
+    agent = Agent(obs_size, env.action_space, gamma=gamma, tau=tau, alpha=alpha, target_update_interval=target_update_interval, hidden_size=hidden_size, learning_rate=learning_rate, exploration_scaling_factor=exploration_scaling_factor)
     memory = ReplayBuffer(replay_buffer_size, input_size=obs_size, n_actions=env.action_space.shape[0])
     agent.train(env=env, env_name=env_name, memory=memory, episodes=100, batch_size=batch_size,
                 updates_per_step=updates_per_step, summary_writer_name=f"straight_maze={alpha}_lr={learning_rate}_hs={hidden_size}_a={alpha}",
