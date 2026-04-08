@@ -6,8 +6,22 @@ from agent import Agent
 from buffer import ReplayBuffer
 from model import *
 gym.register_envs(gymnasium_robotics)
-
+from buffer import ReplayBuffer
 if __name__ == "__main__":
+    replay_buffer_size = 1000000
+    episodes = 1000
+    warmup_steps = 10000
+    batch_size = 69
+    gamma = 0.99
+    update_per_step = 4
+    hidden_size = 256
+    tau = 0.99
+    alpha = 0.12
+    target_update_interval = 1
+    max_episode_steps = 100
+    learning_rate = 0.0003
+    exploration_scaling_factor = 1.0
+
     env_name = "PointMaze_UMaze-v3"
     max_episode_steps = 100
     replay_buffer_size = 1000000
