@@ -1,5 +1,8 @@
-runs
-tmp
-logs
-__pycache__
-checkpoints*
+runs/
+tmp/
+logs/
+__pycache__/
+checkpoints/
+.venv/
+*.pyc
+.DS_Store
