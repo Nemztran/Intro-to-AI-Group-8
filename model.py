@@ -116,7 +116,9 @@ class Actor(nn.Module):
     def save_checkpoint(self):
         """Lưu trọng số model vào file checkpoint"""
         torch.save(self.state_dict(), self.checkpoint_file)
-
+    def load_checkpoint(self):
+        """Tải trọng số model từ file checkpoint"""
+        self.load_state_dict(torch.load(self.checkpoint_file))
     def to(self, device):
         """
         Chuyển model và các tensor liên quan sang CPU hoặc GPU
