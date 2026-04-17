@@ -88,15 +88,15 @@ class Agent:
         qf1, qf2 = self.critic(state_batch, action_batch)  # Lấy giá trị Q hiện tại từ critic
         qf1_loss = F.mse_loss(qf1, next_q_value) 
         qf2_loss = F.mse_loss(qf2, next_q_value)
-        qf2_loss = qf1_loss + qf2_loss
+        qf_loss = qf1_loss + qf2_loss
 
         #Cập nhật critic
         self.critic_optimizer.zero_grad()
-        qf2_loss.backward()
+        qf_loss.backward()
         self.critic_optimizer.step()
 
-        p1, log_pi, _ = self.policy.sample(state_batch)
-        qf1_pi, qf2_pi = self.critic(state_batch, p1)
+        pi, log_pi, _ = self.policy.sample(state_batch)
+        qf1_pi, qf2_pi = self.critic(state_batch, pi)
         min_qf_pi = torch.min(qf1_pi, qf2_pi)
 
         policy_loss = ((self.alpha * log_pi) - min_qf_pi).mean()
@@ -162,7 +162,22 @@ class Agent:
             if i_episode % 10 == 0:
                 self.save_checkpoint()
 
-                
+    def test(self, env, episodes=10, max_episode_steps=500):
+        for i_episode in range(episodes):
+            episode_reward = 0
+            episode_steps = 0
+            done = False
+            state, _ = env.reset()
+
+            while not done and episode_steps < max_episode_steps:
+                action = self.select_action(state)
+                next_state, reward, done, _, _ = env.step(action)
+                episode_steps += 1
+                if reward == 1:
+                    done = True
+                episode_reward += reward
+                state = next_state
+            print(f"Episode: {i_episode}, Episode steps: {episode_steps}, Reward: {episode_reward}")       
     def save_checkpoint(self):
         if not os.path.exists(self.critic.checkpoint_dir): 
             os.makedirs(self.critic.checkpoint_dir)
