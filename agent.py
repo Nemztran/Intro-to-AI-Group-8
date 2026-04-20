@@ -86,15 +86,18 @@ class Agent:
          
         #Calculate predictive loss
         predictive_error = F.mse_loss(predicted_next_state, next_state_batch)
-        predictive_error_no_reduction = F.mse_loss(predicted_next_state, next_state_batch, reduce=False)
+        predictive_error_no_reduction = F.mse_loss(predicted_next_state, next_state_batch, reduction='none')
 
         scale_intrisic_reward = predictive_error_no_reduction.mean(dim=1)
         scale_intrisic_reward = self.exploration_scaling_factor * torch.reshape(scale_intrisic_reward, (batch_size , 1))
 
         #Augment the reward batch
         reward_batch += scale_intrisic_reward
-
-
+        
+        # Cập nhật predictive model
+        self.predictive_model_optim.zero_grad()
+        predictive_error.backward()
+        self.predictive_model_optim.step()
 
         # Cập nhật critic
         with torch.no_grad():
@@ -106,25 +109,18 @@ class Agent:
         qf1, qf2 = self.critic(state_batch, action_batch)  # Lấy giá trị Q hiện tại từ critic
         qf1_loss = F.mse_loss(qf1, next_q_value) 
         qf2_loss = F.mse_loss(qf2, next_q_value)
-        qf2_loss = qf1_loss + qf2_loss
+        qf_loss = qf1_loss + qf2_loss
 
         #Cập nhật critic
         self.critic_optimizer.zero_grad()
-        qf2_loss.backward()
+        qf_loss.backward()
         self.critic_optimizer.step()
 
-        #update predictive model
-        self.predictive_model_optim.zero_grad()
-        predictive_error.backward()
-        self.predictive_model_optim.step()
-
-        p1, log_pi, _ = self.policy.sample(state_batch)
-        qf1_pi, qf2_pi = self.critic(state_batch, p1)
+        pi, log_pi, _ = self.policy.sample(state_batch)
+        qf1_pi, qf2_pi = self.critic(state_batch, pi)
         min_qf_pi = torch.min(qf1_pi, qf2_pi)
 
         policy_loss = ((self.alpha * log_pi) - min_qf_pi).mean()
-
-        #Update policy network
 
         self.policy_optimizer.zero_grad()
         policy_loss.backward()
@@ -143,7 +139,7 @@ class Agent:
         from datetime import datetime
         warmup = 20
         #Tensorboard
-        summary_writer_name= f"runs/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_" + summary_writer_name
+        summary_writer_name= f"runs/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}_" + summary_writer_name
         writer= SummaryWriter(summary_writer_name)
 
         #Training Loop 
@@ -163,14 +159,14 @@ class Agent:
                     action = self.select_action(state)
                 if memory.can_sample(batch_size=batch_size):
                     for i in range(updates_per_step):
-                        critic_1_loss, critic_2_loss, policy_loss, ent_loss, prediction_loss, alpha = self.update_parameters(memory, batch_size, update)
+                        critic_1_loss, critic_2_loss, policy_loss, ent_loss, prediction_loss, alpha_val = self.update_parameters(memory, batch_size, update)
                         #Tensorboard
                         writer.add_scalar('loss/critic_1', critic_1_loss, update)
                         writer.add_scalar('loss/critic_2', critic_2_loss, update)
                         writer.add_scalar('loss/policy', policy_loss, update)
                         writer.add_scalar('loss/entropy', ent_loss, update)
                         writer.add_scalar('loss/prediction_loss', prediction_loss, update)
-                        writer.add_scalar('parameters/alpha', alpha, update)
+                        writer.add_scalar('parameters/alpha', alpha_val, update)
                         update += 1
                 next_state, reward, done, _, _= env.step(action)
 

@@ -9,7 +9,7 @@ gym.register_envs(gymnasium_robotics)
 from buffer import ReplayBuffer
 if __name__ == "__main__":
     replay_buffer_size = 1000000
-    episodes = 100
+    episodes = 1000
     warmup_steps = 10000
     batch_size = 69
     gamma = 0.99
@@ -25,11 +25,11 @@ if __name__ == "__main__":
     env_name = "PointMaze_UMaze-v3"
     max_episode_steps = 100
     replay_buffer_size = 1000000
-    episodes = 100
+    episodes = 1000
     batch_size = 64
     updates_per_step = 4
     gamma = 0.99
-    tau = 0.99
+    tau = 0.005
     alpha = 0.12
     target_update_interval = 1
     hidden_size = 512

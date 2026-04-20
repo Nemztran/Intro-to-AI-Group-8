@@ -111,16 +111,14 @@ class Actor(nn.Module):
 
         log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)  # Điều chỉnh log-probability sau khi áp dụng tanh
         log_prob = log_prob.sum(1, keepdim=True)  # Tổng log-probability cho tất cả các action dimensions
-        mean = torch .tanh(mean) * self.action_scale + self.action_bias  # Tính mean sau khi áp dụng tanh và scale/bias
+        mean = torch.tanh(mean) * self.action_scale + self.action_bias  # Tính mean sau khi áp dụng tanh và scale/bias
         return action, log_prob, mean
     def save_checkpoint(self):
         """Lưu trọng số model vào file checkpoint"""
         torch.save(self.state_dict(), self.checkpoint_file)
-
     def load_checkpoint(self):
         """Tải trọng số model từ file checkpoint"""
         self.load_state_dict(torch.load(self.checkpoint_file))
-
     def to(self, device):
         """
         Chuyển model và các tensor liên quan sang CPU hoặc GPU
