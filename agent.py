@@ -51,6 +51,10 @@ class Agent:
         self.policy = Actor(num_inputs=num_inputs, num_actions=action_space.shape[0], hidden_dim=hidden_size, action_space=action_space).to(self.device)
         self.policy_optimizer = Adam(self.policy.parameters(), learning_rate)
 
+        # Initialize the predictive model
+        self.predictive_model = PredictiveModel(num_inputs, num_actions=action_space.shape[0], hidden_dim=hidden_size).to(self.device)
+        self.predictive_model_optim = Adam(self.predictive_model.parameters(), learning_rate)
+        self.exploration_scaling_factor = exploration_scaling_factor
     def select_action(self, state, evaluate=False):
         """Quyết đinh action dựa trên status hiện tại
         """
@@ -77,6 +81,23 @@ class Agent:
         action_batch = torch.FloatTensor(action_batch).to(self.device)
         reward_batch = torch.FloatTensor(reward_batch).to(self.device).unsqueeze(1)
         mask_batch = torch.FloatTensor(mask_batch).to(self.device).unsqueeze(1)
+        #Predictive model
+        predicted_next_state = self.predictive_model(state_batch, action_batch)
+         
+        #Calculate predictive loss
+        predictive_error = F.mse_loss(predicted_next_state, next_state_batch)
+        predictive_error_no_reduction = F.mse_loss(predicted_next_state, next_state_batch, reduction='none')
+
+        scale_intrisic_reward = predictive_error_no_reduction.mean(dim=1)
+        scale_intrisic_reward = self.exploration_scaling_factor * torch.reshape(scale_intrisic_reward, (batch_size , 1))
+
+        #Augment the reward batch
+        reward_batch += scale_intrisic_reward
+        
+        # Cập nhật predictive model
+        self.predictive_model_optim.zero_grad()
+        predictive_error.backward()
+        self.predictive_model_optim.step()
 
         # Cập nhật critic
         with torch.no_grad():
@@ -111,7 +132,7 @@ class Agent:
         if updates % self.target_update_interval == 0:
             soft_update(self.critic_target, self.critic, self.tau)
         
-        return qf1_loss.item(), qf2_loss.item(), policy_loss.item(), alpha_loss.item(), alpha_tlogs.item()
+        return qf1_loss.item(), qf2_loss.item(), policy_loss.item(), alpha_loss.item(), predictive_error.item(), alpha_tlogs.item()
 
 
     def train(self, env, env_name, memory : ReplayBuffer, episodes = 1000, batch_size=64, updates_per_step=1, summary_writer_name="", max_episode_steps=100):
@@ -138,13 +159,14 @@ class Agent:
                     action = self.select_action(state)
                 if memory.can_sample(batch_size=batch_size):
                     for i in range(updates_per_step):
-                        critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = self.update_parameters(memory, batch_size, update)
+                        critic_1_loss, critic_2_loss, policy_loss, ent_loss, prediction_loss, alpha_val = self.update_parameters(memory, batch_size, update)
                         #Tensorboard
                         writer.add_scalar('loss/critic_1', critic_1_loss, update)
                         writer.add_scalar('loss/critic_2', critic_2_loss, update)
                         writer.add_scalar('loss/policy', policy_loss, update)
                         writer.add_scalar('loss/entropy', ent_loss, update)
-                        writer.add_scalar('parameters/alpha', alpha, update)
+                        writer.add_scalar('loss/prediction_loss', prediction_loss, update)
+                        writer.add_scalar('parameters/alpha', alpha_val, update)
                         update += 1
                 next_state, reward, done, _, _= env.step(action)
 
@@ -162,22 +184,36 @@ class Agent:
             if i_episode % 10 == 0:
                 self.save_checkpoint()
 
-    def test(self, env, episodes=10, max_episode_steps=500):
+    def test(self, env, episodes=10, max_episode_steps=100):
+        """
+        Evaluate the trained agent on the environment
+        Args:
+            env: Gymnasium environment
+            episodes: Number of episodes to evaluate
+            max_episode_steps: Maximum steps per episode
+        """
+        total_reward = 0
+        
         for i_episode in range(episodes):
             episode_reward = 0
             episode_steps = 0
             done = False
             state, _ = env.reset()
-
+            
             while not done and episode_steps < max_episode_steps:
-                action = self.select_action(state)
+                action = self.select_action(state, evaluate=True)
                 next_state, reward, done, _, _ = env.step(action)
+                
                 episode_steps += 1
-                if reward == 1:
-                    done = True
                 episode_reward += reward
                 state = next_state
-            print(f"Episode: {i_episode}, Episode steps: {episode_steps}, Reward: {episode_reward}")       
+            
+            total_reward += episode_reward
+            print(f"Test Episode: {i_episode+1}/{episodes}, reward: {round(episode_reward, 2)}")
+        
+        avg_reward = total_reward / episodes
+        print(f"Average reward: {round(avg_reward, 2)}")
+                
     def save_checkpoint(self):
         if not os.path.exists(self.critic.checkpoint_dir): 
             os.makedirs(self.critic.checkpoint_dir)
