@@ -11,8 +11,8 @@ for i in range (loop_size):
     next_state = np.array([i]*8)
     action = np.array([i])
     reward = i
-    done = i % 2 == 0
-    memory.store_transition(state, action, reward, next_state, done)
+    mask = 0.0 if i % 2 == 0 else 1.0
+    memory.store_transition(state, action, reward, next_state, mask)
 
 print("Testing to ensure the first state is correct")
 assert np.all(memory.state_memory[0] == 9)
@@ -20,4 +20,8 @@ print("Test Successfully :D, T.T")
 
 print("Testing to ensure the last state is correct")
 assert np.all(memory.state_memory[-1] == 17)
+print("Test Successfully :D, T.T")
+
+print("Testing to ensure masks are stored as floats")
+assert memory.mask_memory.dtype == np.float32
 print("Test Successfully :D, T.T")

@@ -66,9 +66,9 @@ class Critic(nn.Module):
         """Lưu trọng số model vào file checkpoint"""
         torch.save(self.state_dict(), self.checkpoint_file)
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, map_location=None):
         """Tải trọng số model từ file checkpoint"""
-        self.load_state_dict(torch.load(self.checkpoint_file))
+        self.load_state_dict(torch.load(self.checkpoint_file, map_location=map_location))
 
 class Actor(nn.Module):
     def __init__(self, num_inputs, num_actions, hidden_dim, action_space = None, checkpoint_dir = 'checkpoints', name = 'actor_network'):
@@ -116,9 +116,9 @@ class Actor(nn.Module):
     def save_checkpoint(self):
         """Lưu trọng số model vào file checkpoint"""
         torch.save(self.state_dict(), self.checkpoint_file)
-    def load_checkpoint(self):
+    def load_checkpoint(self, map_location=None):
         """Tải trọng số model từ file checkpoint"""
-        self.load_state_dict(torch.load(self.checkpoint_file))
+        self.load_state_dict(torch.load(self.checkpoint_file, map_location=map_location))
     def to(self, device):
         """
         Chuyển model và các tensor liên quan sang CPU hoặc GPU
@@ -145,6 +145,6 @@ class PredictiveModel(torch.nn.Module):
         """Lưu trọng số model vào file checkpoint"""
         torch.save(self.state_dict(), self.checkpoint_file)
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, map_location=None):
         """Tải trọng số model từ file checkpoint"""
-        self.load_state_dict(torch.load(self.checkpoint_file))
+        self.load_state_dict(torch.load(self.checkpoint_file, map_location=map_location))
