@@ -1,4 +1,4 @@
-import  numpy as np 
+import numpy as np
 
 class ReplayBuffer():
     """
@@ -16,7 +16,7 @@ class ReplayBuffer():
         self.new_state_memory = np.zeros((self.mem_size, input_size))
         self.action_memory = np.zeros((self.mem_size, n_actions))
         self.reward_memory = np.zeros(self.mem_size)
-        self.terminal_memory = np.zeros(self.mem_size, dtype = bool)
+        self.mask_memory = np.zeros(self.mem_size, dtype=np.float32)
     
     def can_sample(self, batch_size):
         """
@@ -28,7 +28,7 @@ class ReplayBuffer():
         else:
             return False
     
-    def store_transition(self, state, action, reward, next_state, done):
+    def store_transition(self, state, action, reward, next_state, mask):
         """
         Nhận dữ liệu từ môi trường và lưu trữ nó vào bộ nhớ
         """
@@ -38,7 +38,7 @@ class ReplayBuffer():
         self.new_state_memory[index] = next_state
         self.action_memory[index] = action  
         self.reward_memory[index] = reward
-        self.terminal_memory[index] = done
+        self.mask_memory[index] = mask
 
         self.mem_ctr += 1
 
@@ -53,9 +53,9 @@ class ReplayBuffer():
         next_states = self.new_state_memory[batch]
         action = self.action_memory[batch]
         reward = self.reward_memory[batch]
-        dones = self.terminal_memory[batch]
+        masks = self.mask_memory[batch]
 
-        return states, action, reward, next_states, dones
+        return states, action, reward, next_states, masks
 
 
 

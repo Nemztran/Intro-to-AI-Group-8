@@ -1,6 +1,7 @@
 runs/
 tmp/
 logs/
+results/
 __pycache__/
 checkpoints/
 .venv/
