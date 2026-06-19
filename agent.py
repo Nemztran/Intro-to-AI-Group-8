@@ -35,6 +35,7 @@ class Agent:
         intrinsic_reward_clip=1.0,
         use_curiosity=True,
         checkpoint_dir='checkpoints',
+        auto_alpha=True,
     ):
         """
         Args:
@@ -76,6 +77,16 @@ class Agent:
         self.exploration_scaling_factor = exploration_scaling_factor
         self.intrinsic_reward_clip = intrinsic_reward_clip
         self.use_curiosity = use_curiosity and exploration_scaling_factor > 0
+        self.checkpoint_dir = checkpoint_dir
+        self.checkpoint_loaded = False
+
+        # Auto-tune alpha
+        self.auto_alpha = auto_alpha
+        if auto_alpha:
+            self.target_entropy = -torch.prod(torch.Tensor(action_space.shape).to(self.device)).item()
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
+            self.alpha_optim = Adam([self.log_alpha], lr=learning_rate)
+            self.alpha = self.log_alpha.exp().item()
     def select_action(self, state, evaluate=False):
         """Quyết đinh action dựa trên status hiện tại
         """
@@ -146,8 +157,16 @@ class Agent:
         policy_loss.backward()
         self.policy_optimizer.step()
 
-        alpha_loss = torch.tensor(0.).to(self.device)  # 
-        alpha_tlogs = torch.tensor(self.alpha, device=self.device)
+        if self.auto_alpha:
+            alpha_loss = -(self.log_alpha * (log_pi + self.target_entropy).detach()).mean()
+            self.alpha_optim.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optim.step()
+            self.alpha = self.log_alpha.exp().item()
+            alpha_tlogs = self.log_alpha.exp().clone().detach()
+        else:
+            alpha_loss = torch.tensor(0.).to(self.device)
+            alpha_tlogs = torch.tensor(self.alpha, device=self.device)
 
         if updates % self.target_update_interval == 0:
             soft_update(self.critic_target, self.critic, self.tau)
@@ -159,11 +178,12 @@ class Agent:
         from datetime import datetime
         if seed is not None:
             env.action_space.seed(seed)
-        #Tensorboard
+
+        effective_warmup = 0 if self.checkpoint_loaded else warmup_episodes
+
         summary_writer_name= f"runs/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_" + summary_writer_name
         writer= SummaryWriter(summary_writer_name)
 
-        #Training Loop 
         total_numsteps= 0
         update= 0
 
@@ -176,7 +196,7 @@ class Agent:
             episode_success = success_from_info(info)
 
             while not done and episode_steps < max_episode_steps:
-                if warmup_episodes > i_episode:
+                if effective_warmup > i_episode:
                     action = env.action_space.sample()
                 else:
                     action = self.select_action(state)
@@ -210,7 +230,8 @@ class Agent:
             writer.add_scalar('steps/train', episode_steps, i_episode)
             print(f"Episode: {i_episode}, total numsteps: {total_numsteps}, episode steps: {episode_steps}, success: {episode_success}, reward: {round(episode_reward, 2)}")
             if i_episode % 10 == 0:
-                self.save_checkpoint()
+                self.save_checkpoint(memory=memory)
+        self.save_checkpoint(memory=memory)
         writer.close()
 
     def test(self, env, episodes=10, max_episode_steps=100, name="SAC Agent", print_episodes=True, seed=None):
@@ -231,15 +252,20 @@ class Agent:
             seed=seed,
         )
                 
-    def save_checkpoint(self):
-        if not os.path.exists(self.critic.checkpoint_dir): 
-            os.makedirs(self.critic.checkpoint_dir)
+    def save_checkpoint(self, memory=None):
+        if not os.path.exists(self.checkpoint_dir):
+            os.makedirs(self.checkpoint_dir)
         print('Saving models...')
         self.critic.save_checkpoint()
         self.critic_target.save_checkpoint()
         self.policy.save_checkpoint()
         if self.use_curiosity:
             self.predictive_model.save_checkpoint()
+        if self.auto_alpha:
+            torch.save({'log_alpha': self.log_alpha, 'alpha_optim': self.alpha_optim.state_dict()},
+                       os.path.join(self.checkpoint_dir, 'alpha_state.pt'))
+        if memory is not None:
+            memory.save(os.path.join(self.checkpoint_dir, 'replay_buffer.npz'))
     
     def load_checkpoint(self, evaluate=False):
         try:
@@ -263,6 +289,18 @@ class Agent:
                     self.predictive_model.load_checkpoint(map_location=self.device)
                 except FileNotFoundError:
                     print("No predictive model checkpoint found, leaving initialized weights.")
+
+            if self.auto_alpha:
+                alpha_path = os.path.join(self.checkpoint_dir, 'alpha_state.pt')
+                if os.path.exists(alpha_path):
+                    alpha_data = torch.load(alpha_path, map_location=self.device)
+                    self.log_alpha = alpha_data['log_alpha'].to(self.device).requires_grad_(True)
+                    self.alpha_optim = Adam([self.log_alpha], lr=self.policy_optimizer.param_groups[0]['lr'])
+                    self.alpha_optim.load_state_dict(alpha_data['alpha_optim'])
+                    self.alpha = self.log_alpha.exp().item()
+                    print(f"Alpha loaded: {self.alpha:.4f}")
+
+            self.checkpoint_loaded = True
         
         if evaluate:
             self.critic.eval()

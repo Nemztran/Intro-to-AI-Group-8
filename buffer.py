@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 class ReplayBuffer():
     """
@@ -57,6 +58,28 @@ class ReplayBuffer():
 
         return states, action, reward, next_states, masks
 
+    def save(self, path):
+        n = min(self.mem_ctr, self.mem_size)
+        np.savez_compressed(path,
+            states=self.state_memory[:n],
+            next_states=self.new_state_memory[:n],
+            actions=self.action_memory[:n],
+            rewards=self.reward_memory[:n],
+            masks=self.mask_memory[:n],
+            mem_ctr=np.array([self.mem_ctr]))
+        print(f"Buffer saved ({n} transitions)")
 
-
+    def load(self, path):
+        if not os.path.exists(path):
+            print(f"No buffer at {path}, starting empty")
+            return
+        data = np.load(path)
+        n = len(data['states'])
+        self.state_memory[:n] = data['states']
+        self.new_state_memory[:n] = data['next_states']
+        self.action_memory[:n] = data['actions']
+        self.reward_memory[:n] = data['rewards']
+        self.mask_memory[:n] = data['masks']
+        self.mem_ctr = int(data['mem_ctr'][0])
+        print(f"Buffer loaded ({n} transitions)")
 
