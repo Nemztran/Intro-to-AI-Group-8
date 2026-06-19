@@ -41,6 +41,7 @@ if __name__ == "__main__":
         [1, 1, 1, 1, 1]
     ]
 
+    # Phase 1 đã hoàn thành, skip thẳng Phase 2
     env = gym.make(
         env_name,
         max_episode_steps=max_episode_steps,
@@ -52,11 +53,9 @@ if __name__ == "__main__":
     obs_size = obs.shape[0]
     #Agent
     agent = Agent(obs_size, env.action_space, gamma=gamma, tau=tau, alpha=alpha, target_update_interval=target_update_interval, hidden_size=hidden_size, learning_rate=learning_rate, exploration_scaling_factor=exploration_scaling_factor)
+    agent.load_checkpoint()
     memory = ReplayBuffer(replay_buffer_size, input_size=obs_size, n_actions=env.action_space.shape[0])
-    agent.train(env=env, env_name=env_name, memory=memory, episodes=100, batch_size=batch_size,
-                updates_per_step=updates_per_step, summary_writer_name=f"straight_maze={alpha}_lr={learning_rate}_hs={hidden_size}_a={alpha}_phase_1",
-                max_episode_steps=max_episode_steps)
-    
+    env.close()
 
     #Training phase 2
     LARGE_MAZE = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -73,11 +72,33 @@ if __name__ == "__main__":
         env_name,
         max_episode_steps=max_episode_steps_phase_2,
         maze_map=LARGE_MAZE,
-        render_mode=None
+        render_mode= None
     )
     env = RoboGymObservationWrapper(env)
     agent.train(env=env, env_name=env_name, memory=memory, episodes=3000, batch_size=batch_size,
                 updates_per_step=updates_per_step, summary_writer_name=f"large_maze={alpha}_lr={learning_rate}_hs={hidden_size}_a={alpha}_phase_2",
                 max_episode_steps=max_episode_steps_phase_2)
+    env.close()
 
+    #Training phase 3 - Unseen Test Maze
+    UNSEEN_TEST_MAZE = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+                        [1, 0, 1, 0, 1, 0, 1, 1, 0, 1],
+                        [1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+                        [1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
+                        [1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+                        [1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+                        [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+    max_episode_steps_phase_3 = 500
+    env = gym.make(
+        env_name,
+        max_episode_steps=max_episode_steps_phase_3,
+        maze_map=UNSEEN_TEST_MAZE,
+        render_mode=None
+    )
+    env = RoboGymObservationWrapper(env)
+    agent.train(env=env, env_name=env_name, memory=memory, episodes=1000, batch_size=batch_size,
+                updates_per_step=updates_per_step, summary_writer_name=f"unseen_maze={alpha}_lr={learning_rate}_hs={hidden_size}_a={alpha}_phase_3",
+                max_episode_steps=max_episode_steps_phase_3)
     env.close()
