@@ -165,19 +165,3 @@ if __name__ == "__main__":
             seed=args.seed + args.phase1_episodes if args.seed is not None else None,
         )
         env.close()
-
-    # Phase 3 - Unseen Test Maze
-    env = make_env(UNSEEN_TEST_MAZE, PHASE_3_MAX_EPISODE_STEPS)
-    agent.train(
-        env=env,
-        env_name=ENV_NAME,
-        memory=memory,
-        episodes=args.phase3_episodes,
-        batch_size=BATCH_SIZE,
-        updates_per_step=UPDATES_PER_STEP,
-        summary_writer_name=f"{experiment_name}_unseen_maze_lr={LEARNING_RATE}_hs={HIDDEN_SIZE}_phase_3",
-        max_episode_steps=PHASE_3_MAX_EPISODE_STEPS,
-        warmup_episodes=WARMUP_EPISODES,
-        seed=args.seed + args.phase1_episodes + args.phase2_episodes if args.seed is not None else None,
-    )
-    env.close()
