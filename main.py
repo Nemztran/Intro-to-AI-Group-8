@@ -136,4 +136,25 @@ if __name__ == "__main__":
         seed=args.seed + args.phase1_episodes if args.seed is not None else None,
     )
 
+    #Training phase 3 - Unseen Test Maze
+    UNSEEN_TEST_MAZE = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+                        [1, 0, 1, 0, 1, 0, 1, 1, 0, 1],
+                        [1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+                        [1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
+                        [1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+                        [1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+                        [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+    max_episode_steps_phase_3 = 500
+    env = gym.make(
+        env_name,
+        max_episode_steps=max_episode_steps_phase_3,
+        maze_map=UNSEEN_TEST_MAZE,
+        render_mode=None
+    )
+    env = RoboGymObservationWrapper(env)
+    agent.train(env=env, env_name=env_name, memory=memory, episodes=1000, batch_size=batch_size,
+                updates_per_step=updates_per_step, summary_writer_name=f"unseen_maze={alpha}_lr={learning_rate}_hs={hidden_size}_a={alpha}_phase_3",
+                max_episode_steps=max_episode_steps_phase_3)
     env.close()
